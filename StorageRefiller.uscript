@@ -1,0 +1,155 @@
+RegisteredBarricades = map(); // <- No touch or it breaks
+SaveFile = "SavedStorages.config"; // you can rename the thing inside " " if you wish.
+Permission = "admin"; // <- Single permission for all the commands
+RestockInterval = 180; //in Seconds
+
+/* Translations */
+DefaultMessageColor = "white";
+ErrorMessageColor = "red";
+
+setStorage_Null = "You must look at an storage!";
+setStorage_AlreadyRegistered = "This storage is already registered! remove it first with /removeStorage";
+setStorage_Success = "[StorageRefill] Storage added!";
+removeStorage_Null = "You must look at an storage!";
+removeStorage_NotRegistered = "This isn't a registered storage!";
+removeStorage_Success = "[StorageRefill] Storage removed!";
+wipeStoragesMessage = "<color=yellow>[StorageRefill] Storages have been wiped!";
+respawnAllItemsMessage = "<color=green>[StorageRefill] All storages have been restocked!";
+
+event onLoad()
+{
+	loadConfig(RegisteredBarricades);
+  print("[StorageRefill] {0} Storages loaded from unturned/uScript/Data/{1}!".format(RegisteredBarricades.count, SaveFile));
+}
+
+event onInterval(RestockInterval)
+{
+  if(RegisteredBarricades.count == 0) return;
+  foreach (keyValuePair in RegisteredBarricades)
+  {
+    barricade = server.findBarricade(keyValuePair.key);
+    if(barricade == null)
+    {
+      RegisteredBarricades.remove(keyValuePair.key);
+      saveConfig(RegisteredBarricades);
+      return;
+    }
+    inventory = barricade.storage.inventory;
+    instance = barricade.instanceId;
+    itemIds = keyValuePair.value;
+    foreach(itemId in itemIds)
+    {
+      inventory.addItem(itemId);
+    }
+  }
+  print("[StorageRefill] {0} Storages have been restocked!".format(RegisteredBarricades.count, SaveFile));
+}
+
+command setStorage()
+{
+  allowCaller = "player";
+  permission = Permission;
+  execute()
+  {
+    itemsArray = [];
+    barricade = player.look.getBarricade();
+    if(barricade == null) return player.message(setStorage_Null, ErrorMessageColor);
+    if(RegisteredBarricades.containsKey(barricade.instanceId)) return player.message(setStorage_AlreadyRegistered, ErrorMessageColor);
+    inventory = barricade.storage.inventory;
+    instance = barricade.instanceId;
+    RegisteredBarricades.set(instance, itemsArray);
+    foreach (item in inventory.items)
+    {
+      updatedItems = itemsArray.add(item.id);
+      RegisteredBarricades.set(instance, itemsArray);
+      itemsInInstance = RegisteredBarricades.get(instance);
+    }
+    saveConfig(RegisteredBarricades);
+    player.message(setStorage_Success, DefaultMessageColor);
+  }
+}
+
+command removeStorage()
+{
+  allowCaller = "player";
+  permission = Permission;
+  execute()
+  {
+    itemsArray = [];
+    barricade = player.look.getBarricade();
+    if(barricade == null) return player.message(removeStorage_Null, ErrorMessageColor);
+    if(!RegisteredBarricades.containsKey(barricade.instanceId)) return player.message(removeStorage_NotRegistered, ErrorMessageColor);
+    inventory = barricade.storage.inventory;
+    instance = barricade.instanceId;
+    RegisteredBarricades.remove(instance);
+    saveConfig(RegisteredBarricades);
+    player.message(removeStorage_Success, DefaultMessageColor);
+  }
+}
+
+command respawnAllItems()
+{
+  allowCaller = "player";
+  permission = Permission;
+  execute()
+  {
+    foreach (keyValuePair in RegisteredBarricades)
+    {
+      barricade = server.findBarricade(keyValuePair.key);
+      inventory = barricade.storage.inventory;
+      instance = barricade.instanceId;
+      itemIds = keyValuePair.value;
+      foreach(itemId in itemIds)
+      {
+        inventory.addItem(itemId);
+      }
+    }
+    player.message(respawnAllItemsMessage, DefaultMessageColor);
+  }
+}
+
+command wipeStorages()
+{
+  allowCaller = "player";
+  permission = Permission;
+  execute()
+  {
+    wipeConfig(RegisteredBarricades);
+    player.message(wipeStoragesMessage, DefaultMessageColor);
+    RegisteredBarricades.clear();
+  }
+}
+
+function saveConfig(configMap) {
+  text = "";
+  foreach(keyValuePair in configMap) {
+    text += "{0}={1}\n".format(keyValuePair.key, keyValuePair.value.join(","));
+  }
+  file.writeAll(SaveFile, text);
+}
+
+function wipeConfig(configMap)
+{
+  text = "";
+  file.writeAll(SaveFile, text);
+}
+
+function loadConfig(configMap)
+{
+  configText = file.read(SaveFile);
+  configLines = configText.split("\n");
+  foreach(line in configLines)
+  {
+    itemsArray = [];
+    if(line == "") continue;
+    p = line.split("=");
+    instanceIdPart = p[0].toNumber();
+    itemIdsPart = p[1].split(",");
+    foreach (itemId in  itemIdsPart)
+    {
+      itemIdNumber = itemId.toNumber();
+      itemsArray.add(itemIdNumber);
+      RegisteredBarricades.set(instanceIdPart, itemsArray);
+    }
+  }
+}
